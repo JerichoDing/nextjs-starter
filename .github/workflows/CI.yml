@@ -141,6 +141,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [build]
+    env:
+      CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
 
     steps:
       - uses: actions/checkout@v6
@@ -158,19 +160,23 @@ jobs:
         with:
           args: sh -c "HOME=/root npm run test:e2e" # Set HOME to /root to avoid Playwright error with Firebox
         env:
-          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          # Fall back to the placeholder from `.env` when the repository secret isn't configured,
+          # otherwise the empty value fails the t3-env validation in `src/libs/Env.ts`.
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || 'your_clerk_secret_key' }}
 
       - name: Fix test results permission # Give permissions to test results needed by Chromatic
+        if: env.CHROMATIC_PROJECT_TOKEN != ''
         run: |
           sudo chmod -R 777 test-results
 
       - name: Run visual regression tests
+        if: env.CHROMATIC_PROJECT_TOKEN != '' # Skip when the Chromatic secret isn't configured
         uses: chromaui/action@v17
         with:
           playwright: true
           exitOnceUploaded: true # Speed up by skipping the build results
           outputDir: storybook-static
-          projectToken: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          projectToken: ${{ env.CHROMATIC_PROJECT_TOKEN }}
 
       - name: Upload test results
         uses: actions/upload-artifact@v7
@@ -185,15 +191,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # Only run on PRs, and skip when the Crowdin secrets aren't configured (`secrets` can't be used in `if`)
     if: github.event_name == 'pull_request'
+    env:
+      CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
+      CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
 
     steps:
-      - uses: actions/checkout@v6
+      - if: env.CROWDIN_PROJECT_ID == '' || env.CROWDIN_PERSONAL_TOKEN == ''
+        name: Skip Crowdin sync (secrets not configured)
+        run: echo "::notice::CROWDIN_PROJECT_ID / CROWDIN_PERSONAL_TOKEN secrets are not set, skipping Crowdin synchronization."
+
+      - if: env.CROWDIN_PROJECT_ID != '' && env.CROWDIN_PERSONAL_TOKEN != ''
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.pull_request.head.sha }} # Crowdin Actions needs to push commits to the PR branch, checkout HEAD commit instead of merge commit
           fetch-depth: 0
 
-      - name: Crowdin action
+      - if: env.CROWDIN_PROJECT_ID != '' && env.CROWDIN_PERSONAL_TOKEN != ''
+        name: Crowdin action
         uses: crowdin/github-action@v2
         with:
           upload_sources: true
@@ -204,5 +220,3 @@ jobs:
           commit_message: 'chore: new Crowdin translations by GitHub Action'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CROWDIN_PROJECT_ID: ${{ secrets.CROWDIN_PROJECT_ID }}
-          CROWDIN_PERSONAL_TOKEN: ${{ secrets.CROWDIN_PERSONAL_TOKEN }}
