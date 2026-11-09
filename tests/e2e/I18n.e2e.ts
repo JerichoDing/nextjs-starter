@@ -1,8 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const hasRealClerkSecret =
-  !!process.env.CLERK_SECRET_KEY &&
-  process.env.CLERK_SECRET_KEY !== 'your_clerk_secret_key';
+  !!process.env.CLERK_SECRET_KEY && process.env.CLERK_SECRET_KEY !== 'your_clerk_secret_key';
 
 test.describe('I18n', () => {
   test.describe('Language Switching', () => {
