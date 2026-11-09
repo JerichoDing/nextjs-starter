@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 
+const hasRealClerkSecret =
+  !!process.env.CLERK_SECRET_KEY &&
+  process.env.CLERK_SECRET_KEY !== 'your_clerk_secret_key';
+
 test.describe('I18n', () => {
   test.describe('Language Switching', () => {
     test('should switch language from English to French using dropdown and verify text on the homepage', async ({
@@ -25,6 +29,11 @@ test.describe('I18n', () => {
     test('should switch language from English to French using URL and verify text on the sign-in page', async ({
       page,
     }) => {
+      test.skip(
+        !hasRealClerkSecret,
+        'Requires a real CLERK_SECRET_KEY (Clerk sign-in UI does not render with the placeholder)',
+      );
+
       await page.goto('/sign-in');
 
       await expect(page.getByText('Email address')).toBeVisible();
